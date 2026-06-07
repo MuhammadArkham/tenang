@@ -6,7 +6,7 @@ app = FastAPI(title="Tenang API")
 
 # Configure CORS
 origins = [
-    "http://localhost:5173", # Vite default
+    "http://localhost:5173",  # Vite default
     "http://127.0.0.1:5173",
     "http://localhost:3000",
 ]
@@ -20,6 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+
 
 @app.get("/")
 def read_root():
