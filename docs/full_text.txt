@@ -1,0 +1,521 @@
+﻿
+
+
+ðŸ§˜
+TENANG
+Complete Developer Documentation
+Database Schema  â€¢  ADR  â€¢  Gemini Prompts  â€¢  Sprint Board  â€¢  QA Checklist
+
+
+
+DATABASE
+Schema & SQL
+Siap paste langsung ke Supabase SQL Editor
+
+Setup Awal
+-- 1. Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+Tabel: users
+Kolom
+Tipe
+Constraint
+Keterangan
+id
+uuid
+PK
+Primary key, auto-generated
+email
+varchar
+UNIQUE NOT NULL
+Email untuk login
+password_hash
+varchar
+NOT NULL
+Bcrypt hash, tidak pernah plain text
+name
+varchar
+NOT NULL
+Nama tampil di dashboard
+university
+varchar
+nullable
+Nama universitas user
+avatar_url
+varchar
+nullable
+URL foto profil di Supabase Storage
+created_at
+timestamp
+DEFAULT now()
+Waktu registrasi
+updated_at
+timestamp
+DEFAULT now()
+Auto-update saat data berubah
+
+Tabel: mood_entries
+Kolom
+Tipe
+Constraint
+Keterangan
+id
+uuid
+PK
+Primary key
+user_id
+uuid
+FK â†’ users
+Relasi ke tabel users, CASCADE delete
+mood_score
+int
+1â€“5 NOT NULL
+1=sangat buruk, 5=sangat baik
+energy_level
+int
+1â€“5 NOT NULL
+Level energi saat check-in
+context
+varchar
+nullable
+kuliah / tugas / ujian / personal / lainnya
+note
+text
+nullable
+Catatan singkat opsional dari user
+created_at
+timestamp
+DEFAULT now()
+Waktu entry â€” UNIQUE per user per hari
+
+Tabel: journal_entries
+Kolom
+Tipe
+Constraint
+Keterangan
+id
+uuid
+PK
+Primary key
+user_id
+uuid
+FK â†’ users
+Relasi ke tabel users
+content
+text
+NOT NULL
+Isi jurnal bebas dari user
+ai_insight
+text
+nullable
+Refleksi dari Gemini API
+sentiment_score
+float
+-1.0 s/d 1.0
+Skor sentimen dari AI
+sentiment_label
+varchar
+nullable
+positive / neutral / negative
+word_count
+int
+DEFAULT 0
+Auto-hitung via trigger
+created_at
+timestamp
+DEFAULT now()
+Waktu jurnal dibuat
+
+Tabel: habit_logs
+Kolom
+Tipe
+Constraint
+Keterangan
+id
+uuid
+PK
+Primary key
+user_id
+uuid
+FK â†’ users
+Relasi ke tabel users
+screen_time_hours
+float
+0â€“24 NOT NULL
+Total screen time dalam jam (input manual)
+dominant_activity
+varchar
+NOT NULL
+belajar / sosmed / hiburan / game / lainnya
+productive_hours
+float
+nullable
+Estimasi jam produktif
+created_at
+timestamp
+DEFAULT now()
+UNIQUE per user per hari
+
+Tabel: resources
+Kolom
+Tipe
+Constraint
+Keterangan
+id
+uuid
+PK
+Primary key
+title
+varchar
+NOT NULL
+Judul artikel atau resource
+description
+text
+NOT NULL
+Deskripsi singkat konten
+category
+varchar
+NOT NULL
+artikel / teknik / kontak / hotline
+url
+varchar
+nullable
+Link eksternal jika ada
+is_active
+boolean
+DEFAULT true
+Flag hide/show resource
+created_at
+timestamp
+DEFAULT now()
+Waktu resource ditambahkan
+
+Row Level Security (RLS)
+Wajib diaktifkan â€” user hanya bisa akses data miliknya sendiri.
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mood_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE habit_logs ENABLE ROW LEVEL SECURITY;
+ 
+-- User hanya bisa akses data sendiri
+CREATE POLICY "mood_own" ON mood_entries
+  FOR ALL USING (auth.uid()::text = user_id::text);
+ 
+-- Resources: semua bisa baca, tidak ada yang bisa edit via client
+CREATE POLICY "resources_read" ON resources
+  FOR SELECT USING (is_active = TRUE);
+Useful Queries
+Weekly mood aggregation
+SELECT
+  DATE(created_at AT TIME ZONE 'Asia/Jakarta') AS day,
+  ROUND(AVG(mood_score)::numeric, 2) AS avg_mood,
+  COUNT(*) AS entry_count
+FROM mood_entries
+WHERE user_id = $1
+  AND created_at >= NOW() - INTERVAL '7 days'
+GROUP BY day ORDER BY day ASC;
+Korelasi screen time vs mood
+SELECT
+  DATE(h.created_at AT TIME ZONE 'Asia/Jakarta') AS day,
+  h.screen_time_hours,
+  m.mood_score
+FROM habit_logs h
+LEFT JOIN mood_entries m
+  ON DATE(h.created_at AT TIME ZONE 'Asia/Jakarta')
+   = DATE(m.created_at AT TIME ZONE 'Asia/Jakarta')
+  AND h.user_id = m.user_id
+WHERE h.user_id = $1
+  AND h.created_at >= NOW() - INTERVAL '14 days'
+ORDER BY day ASC;
+
+ADR
+Architecture Decision Records
+Kenapa setiap teknologi dipilih â€” bahan jawab pertanyaan judge lomba
+
+Dokumen ini mencatat keputusan arsitektur beserta alasannya. Berguna saat presentasi lomba, code review, atau onboarding.
+
+No.
+Keputusan
+Alasan
+Tradeoff
+ADR-001
+React + Vite
+Ekosistem terbesar, Vite jauh lebih cepat dari CRA, familiar
+Vue 3 lebih ringan tapi ekosistem lebih kecil; Next.js overkill untuk MVP
+ADR-002
+FastAPI
+Auto-generate Swagger, Pydantic validation, async native untuk Gemini
+Express.js lebih familiar tapi Python lebih natural untuk AI/ML work
+ADR-003
+Supabase
+Free tier cukup untuk MVP, Auth + RLS built-in, PostgreSQL relasional
+Free tier auto-pause 1 minggu â€” butuh cron job ping sebagai workaround
+ADR-004
+Gemini 2.5 Flash
+Free tier 15 RPM/1500 req/hari, sangat baik untuk Bahasa Indonesia
+Rate limit jadi bottleneck jika user tiba-tiba banyak â€” perlu queue
+ADR-005
+Vercel
+CDN global, auto-deploy dari GitHub, preview deployment per PR
+Cloudflare Pages lebih cepat di Asia tapi Vercel lebih dioptimalkan untuk React
+ADR-006
+Render
+Support Python native, deploy dari GitHub, free tanpa credit card
+Cold start 30-60 detik â€” mitigasi: loading state "Memuat server..." di FE
+ADR-007
+TanStack Query
+Caching otomatis, loading/error state built-in, invalidation mudah
+SWR lebih ringan tapi fitur lebih terbatas; Redux Toolkit Query overkill
+ADR-008
+Zustand
+Minimal boilerplate, tidak butuh Provider wrapper, bundle < 1KB
+Redux lebih structured tapi terlalu heavy; Context API rawan re-render
+ADR-009
+Zero-cost infra
+Developer tidak punya kartu kredit â€” semua pakai free tier
+Cold start, auto-pause DB, rate limit â€” diterima sebagai tradeoff MVP
+
+GEMINI
+Prompt Templates
+Sudah dioptimalkan untuk mahasiswa Indonesia â€” tone santai & supportif
+
+Prompt 1 â€” Analisis Jurnal + AI Insight
+Dipanggil setiap kali user submit jurnal baru. Output: JSON dengan sentiment + insight.
+JOURNAL_INSIGHT_PROMPT = """
+Kamu adalah teman yang empatik, bukan psikolog atau dokter.
+Bantu mahasiswa Indonesia merefleksikan perasaan lewat jurnal.
+ 
+JURNAL: {journal_content}
+Mood score: {mood_score}/5 | Energi: {energy_level}/5 | Konteks: {context}
+ 
+Balas HANYA dalam format JSON:
+{
+  "sentiment_label": "positive"|"neutral"|"negative",
+  "sentiment_score": float -1.0 sampai 1.0,
+  "insight": "2-3 kalimat hangat. Akui perasaan, jangan langsung solusi.",
+  "highlight": "Satu kalimat tema utama jurnal ini. Maks 20 kata.",
+  "suggested_action": "Satu saran konkret untuk hari ini. Maks 30 kata."
+}
+ 
+ATURAN: Jangan sebut AI. Jangan diagnosis. Jangan kata klinis.
+Kalau ada sinyal krisis, tambah "need_support": true
+"""
+
+Prompt 2 â€” Weekly Summary
+Dipanggil 1x per minggu saat user buka Weekly Report. Hasilnya di-cache di database.
+WEEKLY_SUMMARY_PROMPT = """
+Data {user_name} selama 7 hari terakhir:
+MOOD: {mood_data}
+HABIT: {habit_data}
+JURNAL: {journal_themes}
+ 
+Balas HANYA dalam format JSON:
+{
+  "overall_sentiment": "positive"|"mixed"|"challenging",
+  "summary": "3-4 kalimat ringkasan minggu ini. Maks 100 kata.",
+  "pattern_found": "Satu pola menarik dari data. Maks 40 kata.",
+  "win_of_the_week": "Satu hal positif minggu ini. Maks 25 kata.",
+  "focus_next_week": "Satu hal sederhana untuk dicoba. Maks 30 kata."
+}
+"""
+
+Konfigurasi Gemini di Python
+import google.generativeai as genai
+import json
+ 
+genai.configure(api_key=settings.GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-2.5-flash")
+ 
+async def analyze_journal(content, mood_score, energy_level, context):
+    prompt = JOURNAL_INSIGHT_PROMPT.format(...)
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            "temperature": 0.7,
+            "max_output_tokens": 500,
+            "response_mime_type": "application/json"
+        }
+    )
+    result = json.loads(response.text)
+    if result.get("need_support"):
+        result["crisis_message"] = CRISIS_SUPPORT_MESSAGE
+    return result
+
+ðŸš¨ Crisis Message â€” Tidak dari AI
+Jika need_support: true, tampilkan pesan ini di frontend â€” bukan dari Gemini:
+"Hei, kelihatannya kamu lagi melalui waktu yang sangat berat. Kamu tidak harus menanggung ini sendirian. Sejiwa: 119 ext 8 (24 jam) | Into The Light: intothelightid.org"
+
+SPRINT BOARD
+Task per Minggu
+Ikuti urutan ini â€” jangan lompat sprint
+
+Sprint
+Fokus
+Durasi
+Output
+Sprint 1
+Auth + Project Setup
+Minggu 1
+Login/Register jalan
+Sprint 2
+Mood Feature
+Minggu 2
+Check-in + history + chart
+Sprint 3
+Journal + AI
+Minggu 3
+Jurnal + AI insight berfungsi
+Sprint 4
+Habit + Weekly Insight
+Minggu 4
+Dashboard lengkap
+Sprint 5
+Polish + Deploy
+Minggu 5
+Production-ready
+
+Sprint 1 â€” Auth + Setup (Minggu 1)
+Hari 1â€“2: Project Setup
+â˜ Buat repo GitHub tenang (monorepo frontend + backend)
+â˜ Setup folder structure sesuai PROJECT_STRUCTURE.md
+â˜ Init React + Vite + Tailwind di /frontend
+â˜ Init FastAPI di /backend, test uvicorn jalan
+â˜ Copy .env.example dan isi semua variable
+â˜ Jalankan SQL schema di Supabase SQL Editor
+â˜ Verifikasi semua tabel + RLS aktif
+â˜ Setup GitHub Actions: lint FE + pytest BE on push
+Hari 3â€“4: Backend Auth
+â˜ POST /auth/register â€” hash password, insert ke users
+â˜ POST /auth/login â€” verify password, return JWT
+â˜ GET /auth/me â€” decode JWT, return user data
+â˜ PUT /auth/me â€” update nama, universitas, avatar
+â˜ Test semua endpoint via Swagger UI (localhost:8000/docs)
+Hari 5â€“7: Frontend Auth
+â˜ Halaman Landing â€” hero section + CTA
+â˜ Halaman Register â€” form + validasi + call API
+â˜ Halaman Login â€” form + simpan JWT
+â˜ Protected route â€” redirect ke login kalau belum auth
+â˜ authStore.js â€” simpan user session di Zustand
+â˜ api.js â€” axios instance + interceptor attach JWT
+â˜ Test: register â†’ login â†’ dashboard â†’ logout
+
+Sprint 2 â€” Mood Feature (Minggu 2)
+Backend
+â˜ POST /mood â€” create entry, validasi 1x/hari
+â˜ GET /mood â€” list dengan filter date range
+â˜ GET /mood/weekly â€” aggregated 7 hari
+â˜ GET/DELETE /mood/:id
+Frontend
+â˜ Halaman MoodCheckin â€” slider + energy + context + note
+â˜ Validasi: sudah check-in hari ini?
+â˜ Komponen MoodSlider.jsx â€” visual 1-5
+â˜ Komponen MoodCard.jsx + MoodBadge.jsx
+â˜ Hook useMood.js â€” wrap semua mood API calls
+â˜ Dashboard: tampil mood hari ini + shortcut check-in
+
+Sprint 3 â€” Journal + AI Insight (Minggu 3)
+Backend
+â˜ gemini_service.py â€” setup client + prompt dari GEMINI_PROMPTS.md
+â˜ POST /journal â€” save â†’ call Gemini â†’ save insight
+â˜ Handle Gemini error gracefully (fallback null insight)
+â˜ GET /journal list + GET /journal/:id + DELETE
+Frontend
+â˜ Halaman Journal â€” textarea + submit button
+â˜ Loading state jelas saat AI processing (~2-3 detik)
+â˜ Komponen JournalCard.jsx + SentimentBadge.jsx
+â˜ Halaman JournalDetail â€” full jurnal + AI insight
+â˜ Hook useJournal.js
+
+Sprint 4 â€” Habit + Weekly Insight (Minggu 4)
+Backend
+â˜ POST /habit â€” log screen time + aktivitas
+â˜ GET /habit/weekly â€” aggregated 7 hari
+â˜ GET /insight/correlation â€” join mood + habit
+â˜ GET /insight/summary â€” weekly AI summary (cached 1x/minggu)
+Frontend
+â˜ Halaman HabitLog â€” input screen time + dropdown
+â˜ Halaman WeeklyReport â€” layout utama semua chart
+â˜ WeeklyChart.jsx â€” line chart 7 hari (Recharts)
+â˜ CorrelationChart.jsx â€” screen time vs mood
+â˜ InsightCard.jsx â€” weekly AI summary
+â˜ Halaman Resources â€” list seed data
+â˜ Hook useHabit.js + useInsight.js
+
+Sprint 5 â€” Polish + Deploy (Minggu 5)
+UI Polish
+â˜ Semua halaman mobile responsive (test 375px)
+â˜ Loading skeleton untuk semua data fetch
+â˜ Empty state untuk semua kondisi tanpa data
+â˜ Error state yang informatif
+â˜ Onboarding flow setelah register pertama
+â˜ Streak harian di dashboard
+â˜ Toast notification untuk semua action
+Deploy
+â˜ Deploy frontend ke Vercel
+â˜ Deploy backend ke Render + set env vars
+â˜ Update VITE_API_URL ke URL Render production
+â˜ Update ALLOWED_ORIGINS ke URL Vercel
+â˜ Smoke test semua fitur di production
+â˜ Setup GitHub Actions cron ping Supabase (anti auto-pause)
+
+QA CHECKLIST
+Manual Testing & Security
+Lakukan sebelum submit lomba atau launch production
+
+Auth
+â˜ Register email baru â†’ berhasil + redirect dashboard
+â˜ Register email yang sudah ada â†’ error yang jelas
+â˜ Login credential benar â†’ masuk
+â˜ Login password salah â†’ error yang jelas
+â˜ Akses halaman protected tanpa login â†’ redirect login
+â˜ Logout â†’ session bersih, tidak bisa kembali ke dashboard
+Mood Check-in
+â˜ Submit mood pertama hari ini â†’ berhasil
+â˜ Submit mood kedua hari ini â†’ error "sudah check-in"
+â˜ Submit tanpa note (opsional) â†’ berhasil
+â˜ Slider 1-5 berfungsi visual dengan benar
+â˜ Data muncul di dashboard setelah submit
+Journal + AI
+â˜ Submit jurnal teks pendek (< 10 kata) â†’ berhasil
+â˜ Submit jurnal teks panjang (> 500 kata) â†’ berhasil
+â˜ AI insight muncul dalam < 5 detik
+â˜ Jika Gemini gagal â†’ jurnal tersimpan, insight null (tidak error)
+â˜ Delete jurnal â†’ hilang dari list
+Habit Log
+â˜ Submit habit log â†’ berhasil
+â˜ Submit 2x hari yang sama â†’ error
+â˜ screen_time = 0 â†’ diterima
+â˜ screen_time = 24 â†’ diterima
+â˜ screen_time = 25 â†’ ditolak (validasi)
+Dashboard & Chart
+â˜ Weekly mood chart muncul dengan data 7 hari
+â˜ Hari tanpa data â†’ gap di chart, bukan error
+â˜ Correlation chart muncul minimal 3 hari data
+â˜ Weekly summary muncul atau "belum cukup data"
+Mobile Responsiveness (375px)
+â˜ Landing page OK
+â˜ Dashboard OK
+â˜ Form check-in OK â€” tidak ada overflow
+â˜ Chart bisa dibaca di layar kecil
+â˜ Navbar tidak menutup konten
+Edge Cases
+â˜ User tanpa data â†’ semua empty state muncul
+â˜ Network offline â†’ error message yang ramah
+â˜ Koneksi lambat â†’ loading state, tidak blank
+â˜ Backend cold start â†’ loading state, tidak error
+Security Checklist
+â˜ JWT tidak exposed di localStorage tanpa enkripsi
+â˜ Semua endpoint protected butuh token valid
+â˜ CORS hanya allow domain frontend yang benar
+â˜ .env tidak ter-commit ke GitHub
+â˜ API key Gemini tidak exposed di frontend code
+â˜ Error message backend tidak leak stack trace ke client
+â˜ Input user tidak bisa inject SQL
+Pre-Launch Final
+â˜ README.md lengkap dan akurat
+â˜ Demo video dibuat (< 3 menit, semua fitur utama)
+â˜ Screenshot untuk presentasi lomba
+â˜ Semua link di README berfungsi
+â˜ Privacy notice ada di landing page
+â˜ Lighthouse score > 80 semua kategori
+â˜ API response < 500ms rata-rata
