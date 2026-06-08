@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth
+from app.api import auth, mood
 
 app = FastAPI(title="Tenang API")
 
@@ -19,7 +19,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(mood.router, prefix="/mood", tags=["Mood"])
 
 
 @app.get("/")
