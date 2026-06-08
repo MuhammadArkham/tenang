@@ -66,14 +66,18 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-800">Menu Utama</h2>
           </div>
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <Link to="/journal" className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm text-center hover:shadow-md transition">
-              <div className="text-3xl mb-2">📖</div>
-              <h3 className="font-semibold text-gray-800">Jurnal AI</h3>
+          <div className="grid grid-cols-3 gap-3 mb-8">
+            <Link to="/journal" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center hover:shadow-md transition">
+              <div className="text-2xl mb-1">📖</div>
+              <h3 className="text-sm font-semibold text-gray-800">Jurnal AI</h3>
             </Link>
-            <Link to="/mood" className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm text-center hover:shadow-md transition">
-              <div className="text-3xl mb-2">📊</div>
-              <h3 className="font-semibold text-gray-800">Statistik</h3>
+            <Link to="/community" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center hover:shadow-md transition">
+              <div className="text-2xl mb-1">🌍</div>
+              <h3 className="text-sm font-semibold text-gray-800">Komunitas</h3>
+            </Link>
+            <Link to="/mood" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center hover:shadow-md transition">
+              <div className="text-2xl mb-1">📊</div>
+              <h3 className="text-sm font-semibold text-gray-800">Statistik</h3>
             </Link>
           </div>
         </section>

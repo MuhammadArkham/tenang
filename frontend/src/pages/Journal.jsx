@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useJournal } from '../hooks/useJournal';
 import JournalCard from '../components/JournalCard';
-import { Link } from 'react-router-dom';
 
 export default function Journal() {
   const [content, setContent] = useState('');

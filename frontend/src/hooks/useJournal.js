@@ -12,17 +12,6 @@ export function useJournal() {
     }
   });
 
-  const getJournalDetail = (id) => {
-    return useQuery({
-      queryKey: ['journal', id],
-      queryFn: async () => {
-        const res = await api.get(`/journal/${id}`);
-        return res.data;
-      },
-      enabled: !!id
-    });
-  };
-
   const { mutateAsync: submitJournal, isPending: isSubmitting } = useMutation({
     mutationFn: async (content) => {
       const res = await api.post('/journal/', { content });
@@ -45,9 +34,19 @@ export function useJournal() {
   return {
     journalEntries,
     isLoadingEntries,
-    getJournalDetail,
     submitJournal,
     isSubmitting,
     deleteJournal
   };
+}
+
+export function useJournalDetail(id) {
+  return useQuery({
+    queryKey: ['journal', id],
+    queryFn: async () => {
+      const res = await api.get(`/journal/${id}`);
+      return res.data;
+    },
+    enabled: !!id
+  });
 }

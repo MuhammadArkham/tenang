@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import MoodCheckin from './pages/MoodCheckin';
 import Journal from './pages/Journal';
 import JournalDetail from './pages/JournalDetail';
+import Community from './pages/Community';
+import CommunityPostDetail from './pages/CommunityPostDetail';
 import ProtectedRoute from './components/ProtectedRoute';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -25,6 +27,8 @@ function App() {
             <Route path="/mood/checkin" element={<MoodCheckin />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/journal/:id" element={<JournalDetail />} />
+            <Route path="/community" element={<Community />} />
+            <Route path="/community/:id" element={<CommunityPostDetail />} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />

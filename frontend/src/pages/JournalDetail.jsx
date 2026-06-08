@@ -1,13 +1,13 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useJournal } from '../hooks/useJournal';
+import { useJournal, useJournalDetail } from '../hooks/useJournal';
 import SentimentBadge from '../components/SentimentBadge';
 
 export default function JournalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getJournalDetail, deleteJournal } = useJournal();
+  const { deleteJournal } = useJournal();
   
-  const { data: entry, isLoading } = getJournalDetail(id);
+  const { data: entry, isLoading } = useJournalDetail(id);
 
   const handleDelete = async () => {
     if (window.confirm('Yakin ingin menghapus jurnal ini?')) {
