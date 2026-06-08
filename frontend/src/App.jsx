@@ -4,6 +4,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import MoodCheckin from './pages/MoodCheckin';
+import Journal from './pages/Journal';
+import JournalDetail from './pages/JournalDetail';
 import ProtectedRoute from './components/ProtectedRoute';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -21,6 +23,8 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/mood/checkin" element={<MoodCheckin />} />
+            <Route path="/journal" element={<Journal />} />
+            <Route path="/journal/:id" element={<JournalDetail />} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />
