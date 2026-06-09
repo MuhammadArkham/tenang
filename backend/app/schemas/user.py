@@ -28,8 +28,8 @@ class UserResponse(UserBase):
     id: uuid.UUID
     university: Optional[str] = None
     avatar_url: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class Token(BaseModel):

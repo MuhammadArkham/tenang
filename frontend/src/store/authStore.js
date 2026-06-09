@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 
 export const useAuthStore = create((set) => ({
-  user: { id: 'dummy-id', name: 'Rizky', email: 'rizky@example.com' },
-  token: 'dummy-token',
-  isAuthenticated: true,
+  user: null,
+  token: localStorage.getItem('token') || null,
+  isAuthenticated: !!localStorage.getItem('token'),
   isLoading: false,
   
   setAuth: (user, token) => {

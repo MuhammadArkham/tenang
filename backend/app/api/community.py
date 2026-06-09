@@ -1,123 +1,110 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List
-from datetime import datetime
-
-from app.schemas.community import PostCreate, PostResponse, CommentCreate, CommentResponse
-from app.api.auth import get_current_user
-from app.services.supabase_client import supabase
+from ..schemas.community import PostCreate, PostResponse, CommentCreate, CommentResponse
+from ..services.supabase_client import supabase
+from .auth import get_current_user
 
 router = APIRouter()
 
-# Helper untuk mendapatkan nama user
-def get_user_name(user_id: str) -> str:
-    res = supabase.table("users").select("name").eq("id", user_id).execute()
-    if res.data:
-        return res.data[0]["name"]
-    return "User"
-
 @router.post("/posts", response_model=PostResponse)
 def create_post(post: PostCreate, current_user: dict = Depends(get_current_user)):
-    new_post = {
-        "user_id": current_user["id"],
-        "title": post.title,
-        "content": post.content,
-        "is_anonymous": post.is_anonymous
-    }
-    
-    res = supabase.table("community_posts").insert(new_post).execute()
-    if not res.data:
-        raise HTTPException(status_code=500, detail="Gagal membuat postingan")
+    try:
+        user_id = current_user['sub']
         
-    db_post = dict(res.data[0])
-    
-    # Set nama penulis jika tidak anonim
-    if db_post["is_anonymous"]:
-        db_post["author_name"] = "Anonim"
-    else:
-        db_post["author_name"] = current_user.get("name", "User")
+        data = {
+            "user_id": user_id,
+            "title": post.title,
+            "content": post.content,
+            "is_anonymous": post.is_anonymous
+        }
         
-    db_post["comment_count"] = 0
-    return db_post
+        response = supabase.table("community_posts").insert(data).execute()
+        if not response.data:
+            raise HTTPException(status_code=400, detail="Gagal membuat postingan")
+            
+        post_data = response.data[0]
+        # Jika anonim, author name null, jika tidak ambil dari user
+        author_name = "Seseorang" if post.is_anonymous else current_user.get('name', 'User')
+        
+        return {**post_data, "author_name": author_name, "comments": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/posts", response_model=List[PostResponse])
-def get_posts(limit: int = 50, current_user: dict = Depends(get_current_user)):
-    # Mengambil post
-    res = supabase.table("community_posts").select("*").order("created_at", desc=True).limit(limit).execute()
-    
-    posts = []
-    for row in res.data:
-        post = dict(row)
+def get_posts(current_user: dict = Depends(get_current_user)):
+    try:
+        # Fetch posts
+        response = supabase.table("community_posts").select("*, users(name)").order("created_at", desc=True).execute()
+        posts = response.data
         
-        # Anonimisasi
-        if post["is_anonymous"]:
-            post["author_name"] = "Anonim"
-        else:
-            post["author_name"] = get_user_name(post["user_id"])
+        result = []
+        for p in posts:
+            author_name = "Seseorang" if p.get('is_anonymous') else (p.get('users', {}).get('name') if p.get('users') else 'User')
+            p_data = {
+                **p,
+                "author_name": author_name,
+                "comments": []
+            }
+            # Remove the raw users join data to match schema
+            if 'users' in p_data:
+                del p_data['users']
+            result.append(p_data)
             
-        # Hitung jumlah komentar (bisa pakai count aggregation jika database support, kita hitung manual atau query terpisah untuk sederhananya)
-        comment_res = supabase.table("community_comments").select("id").eq("post_id", post["id"]).execute()
-        post["comment_count"] = len(comment_res.data) if comment_res.data else 0
-        
-        posts.append(post)
-        
-    return posts
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/posts/{post_id}", response_model=PostResponse)
 def get_post_detail(post_id: str, current_user: dict = Depends(get_current_user)):
-    res = supabase.table("community_posts").select("*").eq("id", post_id).execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Postingan tidak ditemukan")
+    try:
+        # Fetch post
+        post_res = supabase.table("community_posts").select("*, users(name)").eq("id", post_id).execute()
+        if not post_res.data:
+            raise HTTPException(status_code=404, detail="Postingan tidak ditemukan")
+            
+        post = post_res.data[0]
+        post_author = "Seseorang" if post.get('is_anonymous') else (post.get('users', {}).get('name') if post.get('users') else 'User')
         
-    post = dict(res.data[0])
-    
-    if post["is_anonymous"]:
-        post["author_name"] = "Anonim"
-    else:
-        post["author_name"] = get_user_name(post["user_id"])
+        # Fetch comments
+        comments_res = supabase.table("community_comments").select("*, users(name)").eq("post_id", post_id).order("created_at", desc=True).execute()
         
-    comment_res = supabase.table("community_comments").select("id").eq("post_id", post["id"]).execute()
-    post["comment_count"] = len(comment_res.data) if comment_res.data else 0
-    
-    return post
+        comments_list = []
+        for c in comments_res.data:
+            c_author = "Seseorang" if c.get('is_anonymous') else (c.get('users', {}).get('name') if c.get('users') else 'User')
+            c_data = {**c, "author_name": c_author}
+            if 'users' in c_data:
+                del c_data['users']
+            comments_list.append(c_data)
+            
+        post_data = {**post, "author_name": post_author, "comments": comments_list}
+        if 'users' in post_data:
+            del post_data['users']
+            
+        return post_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/posts/{post_id}/comments", response_model=CommentResponse)
 def create_comment(post_id: str, comment: CommentCreate, current_user: dict = Depends(get_current_user)):
-    # Pastikan post ada
-    post_check = supabase.table("community_posts").select("id").eq("id", post_id).execute()
-    if not post_check.data:
-        raise HTTPException(status_code=404, detail="Postingan tidak ditemukan")
+    try:
+        user_id = current_user['sub']
         
-    new_comment = {
-        "post_id": post_id,
-        "user_id": current_user["id"],
-        "content": comment.content,
-        "is_anonymous": comment.is_anonymous
-    }
-    
-    res = supabase.table("community_comments").insert(new_comment).execute()
-    if not res.data:
-        raise HTTPException(status_code=500, detail="Gagal menambahkan komentar")
+        data = {
+            "post_id": post_id,
+            "user_id": user_id,
+            "content": comment.content,
+            "is_anonymous": comment.is_anonymous
+        }
         
-    db_comment = dict(res.data[0])
-    
-    if db_comment["is_anonymous"]:
-        db_comment["author_name"] = "Anonim"
-    else:
-        db_comment["author_name"] = current_user.get("name", "User")
+        response = supabase.table("community_comments").insert(data).execute()
+        if not response.data:
+            raise HTTPException(status_code=400, detail="Gagal menambahkan komentar")
+            
+        c_data = response.data[0]
+        author_name = "Seseorang" if comment.is_anonymous else current_user.get('name', 'User')
         
-    return db_comment
-
-@router.get("/posts/{post_id}/comments", response_model=List[CommentResponse])
-def get_comments(post_id: str, current_user: dict = Depends(get_current_user)):
-    res = supabase.table("community_comments").select("*").eq("post_id", post_id).order("created_at", desc=False).execute()
-    
-    comments = []
-    for row in res.data:
-        c = dict(row)
-        if c["is_anonymous"]:
-            c["author_name"] = "Anonim"
-        else:
-            c["author_name"] = get_user_name(c["user_id"])
-        comments.append(c)
-        
-    return comments
+        return {**c_data, "author_name": author_name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

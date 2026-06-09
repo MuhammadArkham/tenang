@@ -1,73 +1,91 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { useState, useCallback } from 'react';
+import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
+
+const API_URL = 'http://localhost:8000';
 
 export function useCommunity() {
-  const queryClient = useQueryClient();
+  const [posts, setPosts] = useState([]);
+  const [currentPost, setCurrentPost] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const token = useAuthStore(state => state.token);
 
-  const { data: posts, isLoading: isLoadingPosts } = useQuery({
-    queryKey: ['communityPosts'],
-    queryFn: async () => {
-      const res = await api.get('/community/posts');
-      return res.data;
-    }
-  });
+  const config = {
+    headers: { Authorization: `Bearer ${token}` }
+  };
 
-  const { mutateAsync: createPost, isPending: isCreatingPost } = useMutation({
-    mutationFn: async (data) => {
-      const res = await api.post('/community/posts', data);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['communityPosts'] });
+  const fetchPosts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/community/posts`, config);
+      setPosts(response.data);
+    } catch (error) {
+      console.error('Failed to fetch posts:', error);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  }, [token]);
+
+  const fetchPostDetail = useCallback(async (id) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/community/posts/${id}`, config);
+      setCurrentPost(response.data);
+    } catch (error) {
+      console.error('Failed to fetch post detail:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  const createPost = async (title, content, isAnonymous) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.post(`${API_URL}/community/posts`, {
+        title,
+        content,
+        is_anonymous: isAnonymous
+      }, config);
+      setPosts([response.data, ...posts]);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create post:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createComment = async (postId, content, isAnonymous) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.post(`${API_URL}/community/posts/${postId}/comments`, {
+        content,
+        is_anonymous: isAnonymous
+      }, config);
+      
+      if (currentPost && currentPost.id === postId) {
+        setCurrentPost({
+          ...currentPost,
+          comments: [response.data, ...currentPost.comments]
+        });
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create comment:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return {
     posts,
-    isLoadingPosts,
+    currentPost,
+    isLoading,
+    fetchPosts,
+    fetchPostDetail,
     createPost,
-    isCreatingPost
-  };
-}
-
-export function useCommunityPost(postId) {
-  const queryClient = useQueryClient();
-
-  const { data: post, isLoading: isLoadingPost } = useQuery({
-    queryKey: ['communityPost', postId],
-    queryFn: async () => {
-      const res = await api.get(`/community/posts/${postId}`);
-      return res.data;
-    },
-    enabled: !!postId
-  });
-
-  const { data: comments, isLoading: isLoadingComments } = useQuery({
-    queryKey: ['communityComments', postId],
-    queryFn: async () => {
-      const res = await api.get(`/community/posts/${postId}/comments`);
-      return res.data;
-    },
-    enabled: !!postId
-  });
-
-  const { mutateAsync: addComment, isPending: isAddingComment } = useMutation({
-    mutationFn: async (data) => {
-      const res = await api.post(`/community/posts/${postId}/comments`, data);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['communityComments', postId] });
-      queryClient.invalidateQueries({ queryKey: ['communityPost', postId] });
-    }
-  });
-
-  return {
-    post,
-    isLoadingPost,
-    comments,
-    isLoadingComments,
-    addComment,
-    isAddingComment
+    createComment
   };
 }

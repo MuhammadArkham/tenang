@@ -4,6 +4,7 @@ from jose import jwt, JWTError
 from app.schemas.user import UserCreate, UserLogin, UserResponse, Token, UserUpdate
 from app.services.supabase_client import supabase
 from app.core.security import get_password_hash, verify_password, create_access_token
+import uuid
 from app.core.config import settings
 
 router = APIRouter()
@@ -43,8 +44,9 @@ def register(user: UserCreate):
     # create in supabase auth? The ADR says "hash password, insert ke users".
     # Supabase also has built-in auth, but we are managing it manually in the 'users' table based on ADR.
     new_user = {
+        "id": str(uuid.uuid4()),
         "email": user.email,
-        "password_hash": hashed_password,
+        "hashed_password": hashed_password,
         "name": user.name,
     }
     response = supabase.table("users").insert(new_user).execute()
@@ -62,7 +64,7 @@ def login(user_login: UserLogin):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
     user = response.data[0]
-    if not verify_password(user_login.password, user["password_hash"]):
+    if not verify_password(user_login.password, user["hashed_password"]):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
     access_token = create_access_token(data={"sub": str(user["id"])})

@@ -1,42 +1,33 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel
+from typing import List, Optional
 from datetime import datetime
-from uuid import UUID
 
-class PostCreate(BaseModel):
-    title: str = Field(..., min_length=3, max_length=100)
-    content: str = Field(..., min_length=10)
-    is_anonymous: bool = Field(default=False)
+class CommentBase(BaseModel):
+    content: str
+    is_anonymous: bool = False
 
-class PostResponse(BaseModel):
-    id: UUID
-    user_id: UUID
+class CommentCreate(CommentBase):
+    pass
+
+class CommentResponse(CommentBase):
+    id: str
+    post_id: str
+    user_id: str
+    created_at: datetime
+    # Jika anonim, author_name akan diisi string generik seperti "Seseorang"
+    author_name: Optional[str] = None
+
+class PostBase(BaseModel):
     title: str
     content: str
-    is_anonymous: bool
+    is_anonymous: bool = False
+
+class PostCreate(PostBase):
+    pass
+
+class PostResponse(PostBase):
+    id: str
+    user_id: str
     created_at: datetime
-    
-    # Ditambahkan manual saat fetching
     author_name: Optional[str] = None
-    comment_count: Optional[int] = 0
-
-    class Config:
-        from_attributes = True
-
-class CommentCreate(BaseModel):
-    content: str = Field(..., min_length=2)
-    is_anonymous: bool = Field(default=False)
-
-class CommentResponse(BaseModel):
-    id: UUID
-    post_id: UUID
-    user_id: UUID
-    content: str
-    is_anonymous: bool
-    created_at: datetime
-    
-    # Ditambahkan manual
-    author_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+    comments: List[CommentResponse] = []

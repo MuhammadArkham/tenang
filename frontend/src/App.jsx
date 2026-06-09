@@ -11,6 +11,8 @@ import CommunityPostDetail from './pages/CommunityPostDetail';
 import HabitLog from './pages/HabitLog';
 import LaporanMingguan from './pages/LaporanMingguan';
 import Resources from './pages/Resources';
+import Profil from './pages/Profil';
+import Pengaturan from './pages/Pengaturan';
 import ProtectedRoute from './components/ProtectedRoute';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -35,6 +37,8 @@ function App() {
             <Route path="/habit" element={<HabitLog />} />
             <Route path="/laporan" element={<LaporanMingguan />} />
             <Route path="/resources" element={<Resources />} />
+            <Route path="/profil" element={<Profil />} />
+            <Route path="/pengaturan" element={<Pengaturan />} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />
